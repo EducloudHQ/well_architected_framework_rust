@@ -109,14 +109,14 @@ async fn function_handler<T: GetFile>(
         .await;
 
 
-       info!("message count in queue inside if is : {:#?}", message_batch.len());
+  
        message_batch = vec![];
 
     info!("Send message to the queue: {:#?}", rsp);
         }
         
     }
-    info!("message count in queue outside if is : {:#?}", message_batch.len());
+  
 
     if message_batch.len() !=0{
          let rsp = sqs_client
@@ -126,7 +126,7 @@ async fn function_handler<T: GetFile>(
         .send()
         .await;
        
- info!("message count in queue inside another if is : {:#?}", message_batch.len());
+
     info!("Send message to the queue: {:#?}", rsp);
     }
    Ok(())
