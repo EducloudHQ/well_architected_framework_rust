@@ -39,8 +39,7 @@ async fn function_handler(
     table_name: &String,
     client: &Client,
 ) -> Result<(), Error> {
-    //info!("sqs payload {:?}",&event.payload);
-    //info!("sqs payload records {:?}",&event.payload.records[0]);
+
 
     for data_more in &event.payload.records {
         let record_data = &data_more.body;
