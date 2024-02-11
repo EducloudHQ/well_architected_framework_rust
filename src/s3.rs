@@ -8,8 +8,6 @@ pub trait GetFile {
     async fn get_file(&self, bucket: &str, key: &str) -> Result<Vec<u8>, GetObjectError>;
 }
 
-
-
 #[async_trait]
 impl GetFile for S3Client {
     async fn get_file(&self, bucket: &str, key: &str) -> Result<Vec<u8>, GetObjectError> {
@@ -32,4 +30,3 @@ impl GetFile for S3Client {
         };
     }
 }
-
