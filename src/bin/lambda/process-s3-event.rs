@@ -28,23 +28,17 @@ async fn main() -> Result<(), Error> {
     let s3_client = S3Client::new(&config);
     let bucket_name = env::var("BUCKET").expect("Couldn't get the bucket");
     let queue_name = env::var("QUEUE").expect("Couldn't get the queue");
-    let bucket_name_ref = &bucket_name;
-    let s3_client_ref = &s3_client;
-    let sqs_client_ref = &sqs_client;
-    let queue_name_ref = &queue_name;
 
-    let func = service_fn(move |event| async move {
+lambda_runtime::run(service_fn( |event| {
         function_handler(
             event,
-            bucket_name_ref,
-            s3_client_ref,
-            sqs_client_ref,
-            queue_name_ref,
+            &bucket_name,
+            &s3_client,
+            &sqs_client,
+            &queue_name,
         )
-        .await
-    });
-
-    run(func).await?;
+       
+    })).await?;
     Ok(())
 }
 
@@ -105,9 +99,9 @@ async fn function_handler<T: GetFile>(
                 .send()
                 .await;
 
-            message_batch = vec![];
+              message_batch = vec![];
 
-            info!("Send message to the queue: {:#?}", rsp);
+              info!("Send message to the queue: {:#?}", rsp);
         }
     }
 
