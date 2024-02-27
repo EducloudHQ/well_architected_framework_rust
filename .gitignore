@@ -59,6 +59,8 @@ Temporary Items
 # AWS User-specific
 .idea/**/aws.xml
 
+.aws-sam
+
 # Generated files
 .idea/**/contentModel.xml
 
