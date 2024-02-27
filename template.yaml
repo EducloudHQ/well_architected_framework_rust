@@ -15,6 +15,7 @@ Globals:
       - arm64
     MemorySize: 128
     Runtime: provided.al2
+    CodeUri: ./
     Environment:
       Variables:
         TABLE_NAME: !Ref InventoryTable
@@ -191,9 +192,11 @@ Resources:
   S3EventProcessingFunction:
     Type: AWS::Serverless::Function
     Metadata:
-      BuildMethod: makefile
+      BuildMethod: rust-cargoLambda
+      BuildProperties:
+        Binary: process-s3-event
+        CargoFlags: --features aws-lambda
     Properties:
-      CodeUri: target/lambda/process-s3-event/
       Policies:
         - S3ReadPolicy:
             BucketName: !Sub "${AWS::StackName}-${AWS::Region}-${AWS::AccountId}*"
@@ -214,9 +217,11 @@ Resources:
   SQSEventProcessingFunction:
     Type: AWS::Serverless::Function
     Metadata:
-      BuildMethod: makefile
+      BuildMethod: rust-cargolambda
+      BuildProperties:
+        Binary: process-sqs-event
+        CargoFlags: --features aws-lambda
     Properties:
-      CodeUri: target/lambda/process-sqs-event/
       Policies:
         - SQSPollerPolicy:
             QueueName: !GetAtt EmbeddingQueue.QueueName
