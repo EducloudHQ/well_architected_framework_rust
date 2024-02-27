@@ -192,10 +192,9 @@ Resources:
   S3EventProcessingFunction:
     Type: AWS::Serverless::Function
     Metadata:
-      BuildMethod: rust-cargoLambda
+      BuildMethod: rust-cargolambda
       BuildProperties:
         Binary: process-s3-event
-        CargoFlags: --features aws-lambda
     Properties:
       Policies:
         - S3ReadPolicy:
@@ -220,7 +219,6 @@ Resources:
       BuildMethod: rust-cargolambda
       BuildProperties:
         Binary: process-sqs-event
-        CargoFlags: --features aws-lambda
     Properties:
       Policies:
         - SQSPollerPolicy:

@@ -1,0 +1,260 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'sam-rust-inventory
+
+  Sample SAM Template for sam-rust-inventory
+
+  '
+Globals:
+  Function:
+    Timeout: 3
+    Tracing: Active
+    Handler: bootstrap
+    Architectures:
+    - arm64
+    MemorySize: 128
+    Runtime: provided.al2
+    CodeUri: ./
+    Environment:
+      Variables:
+        TABLE_NAME:
+          Ref: InventoryTable
+        QUEUE:
+          Fn::GetAtt:
+          - EmbeddingQueue
+          - QueueName
+        BUCKET:
+          Fn::Sub: ${AWS::StackName}-${AWS::Region}-${AWS::AccountId}
+Resources:
+  AppSyncServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - appsync.amazonaws.com
+          Action:
+          - sts:AssumeRole
+  LambdaLoggingPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: LambdaXRayPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - xray:PutTraceSegments
+          - xray:PutTelemetryRecords
+          - logs:CreateLogGroup
+          - logs:CreateLogStream
+          - logs:PutLogEvents
+          Resource: '*'
+      Roles:
+      - Ref: AddLambdaRole
+  AddLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+  DocumentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: ${AWS::StackName}-${AWS::Region}-${AWS::AccountId}
+      CorsConfiguration:
+        CorsRules:
+        - AllowedHeaders:
+          - '*'
+          AllowedMethods:
+          - GET
+          - PUT
+          - HEAD
+          - POST
+          - DELETE
+          AllowedOrigins:
+          - '*'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+  DocumentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      PolicyDocument:
+        Id: EnforceHttpsPolicy
+        Version: '2012-10-17'
+        Statement:
+        - Sid: EnforceHttpsSid
+          Effect: Deny
+          Principal: '*'
+          Action: s3:*
+          Resource:
+          - Fn::Sub: arn:aws:s3:::${DocumentBucket}/*
+          - Fn::Sub: arn:aws:s3:::${DocumentBucket}
+          Condition:
+            Bool:
+              aws:SecureTransport: 'false'
+      Bucket:
+        Ref: DocumentBucket
+  EmbeddingQueue:
+    Type: AWS::SQS::Queue
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      VisibilityTimeout: 180
+      MessageRetentionPeriod: 3600
+  EmbeddingQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+      - Ref: EmbeddingQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Id: SecureTransportPolicy
+        Statement:
+        - Sid: AllowSecureTransportOnly
+          Effect: Deny
+          Principal: '*'
+          Action: SQS:*
+          Resource: '*'
+          Condition:
+            Bool:
+              aws:SecureTransport: false
+  InvokeLambdaResolverPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: DirectAppSyncLambda
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action: lambda:invokeFunction
+          Resource:
+          - Fn::GetAtt:
+            - S3EventProcessingFunction
+            - Arn
+      Roles:
+      - Ref: AddLambdaRole
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AutoVerifiedAttributes:
+      - email
+      UsernameAttributes:
+      - email
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId:
+        Ref: CognitoUserPool
+      ClientName:
+        Ref: CognitoUserPool
+      GenerateSecret: false
+  InventoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+  S3EventProcessingFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: rust-cargolambda
+      BuildProperties:
+        Binary: process-s3-event
+      SamResourceId: S3EventProcessingFunction
+    Properties:
+      Policies:
+      - S3ReadPolicy:
+          BucketName:
+            Fn::Sub: ${AWS::StackName}-${AWS::Region}-${AWS::AccountId}*
+      - SQSSendMessagePolicy:
+          QueueName:
+            Fn::GetAtt:
+            - EmbeddingQueue
+            - QueueName
+      Events:
+        S3Event:
+          Type: S3
+          Properties:
+            Bucket:
+              Ref: DocumentBucket
+            Events:
+            - s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                - Name: suffix
+                  Value: .csv
+      CodeUri: S3EventProcessingFunction
+  SQSEventProcessingFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: rust-cargolambda
+      BuildProperties:
+        Binary: process-sqs-event
+      SamResourceId: SQSEventProcessingFunction
+    Properties:
+      Policies:
+      - SQSPollerPolicy:
+          QueueName:
+            Fn::GetAtt:
+            - EmbeddingQueue
+            - QueueName
+      - DynamoDBWritePolicy:
+          TableName:
+            Ref: InventoryTable
+      Events:
+        RetrieveFromSQS:
+          Type: SQS
+          Properties:
+            Queue:
+              Fn::GetAtt:
+              - EmbeddingQueue
+              - Arn
+            BatchSize: 10
+            FunctionResponseTypes:
+            - ReportBatchItemFailures
+      CodeUri: SQSEventProcessingFunction
+Outputs:
+  S3EventProcessingFunction:
+    Description: S3 Processing Lambda Function ARN
+    Value:
+      Fn::GetAtt:
+      - S3EventProcessingFunction
+      - Arn
+  PutTable:
+    Description: DynamoDB table name
+    Value:
+      Fn::GetAtt:
+      - InventoryTable
+      - Arn

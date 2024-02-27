@@ -4,7 +4,7 @@ use aws_config::{load_defaults, BehaviorVersion};
 use aws_lambda_events::{event::s3::S3Event, serde_json};
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_sqs::{types::SendMessageBatchRequestEntry, Client as SqsClient};
-use lambda_runtime::{run, service_fn, Error, LambdaEvent};
+use lambda_runtime::{service_fn, Error, LambdaEvent};
 use sam_rust_inventory::model::Record;
 use sam_rust_inventory::s3::GetFile;
 
